@@ -1,0 +1,17 @@
+# Ignore all
+*
+
+# But not these file
+!include/
+!include/grasping_node/
+!include/grasping_node/.keep
+
+!src/
+!src/grasp_bag.cpp
+
+!LICENSE
+!package.xml
+!README.md
+!CMakeLists.txt
+!.gitignore
+
