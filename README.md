@@ -21,6 +21,7 @@ This package:
 
 ## 📂 Folder Structure
 
+```bash
 grasping_node/
 ├── src/
 │ └── grasp_bag.cpp # Main grasping routine node
@@ -30,6 +31,7 @@ grasping_node/
 ├── package.xml
 ├── README.md
 └── .gitignore
+```
 
 ## 📋 Dependencies
 
