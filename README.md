@@ -19,18 +19,6 @@ This package:
 - Compatible with both simulation and real robots
 - Visual debugging in RViz (`visualization_msgs/Marker`)
 
-## 📂 Folder Structure
-
-grasping_node/
-├── src/
-│ └── grasp_bag.cpp # Main grasping routine node
-├── include/
-│ └── grasping_node/... # (Optional) headers
-├── CMakeLists.txt
-├── package.xml
-├── README.md
-└── .gitignore
-
 ## 📋 Dependencies
 
 Make sure you have these ROS 2 packages installed:
