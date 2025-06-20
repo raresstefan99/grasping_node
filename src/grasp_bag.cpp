@@ -7,6 +7,7 @@
 #include "visualization_msgs/msg/marker.hpp"
 #include <thread>
 #include <atomic>
+#include "ament_index_cpp/get_package_share_directory.hpp"
 
 using std::placeholders::_1;
 
@@ -21,27 +22,40 @@ enum class GraspState {
 
 class GraspNode : public rclcpp::Node {
 public:
+
+  // ========================================================= COSTRUTTORE =========================================================
   GraspNode() : Node("grasp_bag_node") {
     // Per evitare conflitti di accesso alle risorse condivise - Race Conditions
-    callback_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // Gruppo di callback mutualmente esclusivo - risponde solo a una callback alla volta 
+    // Callback separati per evitare che la ricezione dei keypoint interferisca con l'input utente
+    // Creazione dei gruppi
+    keypoint_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // MutuallyExclusive per evitare conflitti tra callback
+    timer_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); 
+    
+    //Opzioni per la subscription
     rclcpp::SubscriptionOptions options;
-    options.callback_group = callback_group_;
+    options.callback_group = keypoint_callback_group_;
 
     // Iscrizione al topic dei keypoint
     // Utilizza il callback group per evitare conflitti di accesso alle risorse condivise
-    subscription_ = this->create_subscription<geometry_msgs::msg::Point>(
+    keypoint_sub_ = this->create_subscription<geometry_msgs::msg::Point>(
       "/keypoint_data",
       rclcpp::QoS(10),
       std::bind(&GraspNode::keypoint_callback, this, _1),
       options);
     
+    // Timer per input utente
+    timer_ = this->create_wall_timer(
+      std::chrono::milliseconds(500),
+      std::bind(&GraspNode::input_menu, this),
+      timer_callback_group_);
+
     // Publisher del comando di presa e rilascio
     pub_grasp_control = this->create_publisher<std_msgs::msg::String>("/grasp_control", 10);
     // Publisher per il marker in RViz
     marker_pub_ = this->create_publisher<visualization_msgs::msg::Marker>("keypoint_marker", 10);
   }
 
-  // Inizzializza il menu del manipolatore
+  // ========================================================= INIZIALIZZA MANIPOLATORE =========================================================
   void init() {
     ManipulatorMenuParams params;
     params.manipulator_name = "manipulator";
@@ -49,12 +63,16 @@ public:
     params.joint_names = {"shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
                           "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"};
     params.base_link_name = "base_link_inertia";
-    params.known_poses_path = "/home/stefan/bag_catcher_ros2_ws/src/manipulators/manipulators/config/known_poses.yaml";
     params.gripper = "robotiq_85";
+    
+    // Ricava il path del pacchetto manipulators
+    std::string pkg_share_dir = ament_index_cpp::get_package_share_directory("manipulators");
+    params.known_poses_path = pkg_share_dir + "/config/known_poses.yaml";   
 
     menu_ = std::make_shared<ManipulatorMenu>(params, shared_from_this(), false);
   }
 
+  // ========================================================= FUNZIONI PUBBLICHE DI GESTIONE DELLA ROUTINE =========================================================
   // Funzione per gestire flag di avanzamento della routine
   void set_flag(int value){
     flag.store(value); 
@@ -84,26 +102,79 @@ public:
   }
 
   // Funzione getter per il flag di approvazione del keypoint
-  // Questa funzione può essere chiamata per verificare lo stato della decisione dell'utente
-  // Momentaneamente non viene utilizzata
   char getDecisionFlag() const {
     return decision_flag_;
   }
 
-
 private:
+  // ========================================================= VARIABILI PRIVATE  =========================================================
+
   std::shared_ptr<ManipulatorMenu> menu_; // Puntatore al menu del manipolatore
-  rclcpp::CallbackGroup::SharedPtr callback_group_; //  Gruppo di callback per gestire le risorse condivise
-  rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr subscription_; // Iscrizione al topic dei keypoint
+  rclcpp::CallbackGroup::SharedPtr keypoint_callback_group_; //  Gruppo di callback per gestire keypoint callback
+  rclcpp::CallbackGroup::SharedPtr timer_callback_group_; //  Gruppo di callback per gestire il menu
+  rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr keypoint_sub_; // Iscrizione al topic dei keypoint
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_grasp_control; // Publisher per i comandi di presa e rilascio
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_; // Publisher per i marker in RViz
   GraspState state = GraspState::Approach;  // Stato corrente della routine di presa
   std::atomic<int> flag;  // Flag per gestire l'avanzamento della routine
   bool callback_enabled_ = false;  // Flag per abilitare/disabilitare la callback del keypoint
   bool keypoint_arrived = false;  // Flag per verificare se il keypoint è stato ricevuto
-  geometry_msgs::msg::Pose initial_pose;  // Posa iniziale del robot
+  geometry_msgs::msg::Pose target_pose;  // Posa iniziale del robot
   std::atomic<char> decision_flag_{' '};  // ' ' = nessuna decisione - flag di approvazione del keypoint: 'c' = continua, 'r' = rigenera
+  bool waiting_for_decision_ = false; // Flag per verificare se si sta aspettando la decisione sull'approvazione del keypoint
+  rclcpp::TimerBase::SharedPtr timer_;
 
+  // ========================================================= FUNZIONI PRIVATE  =========================================================
+  // Funzione menu per gestire l'input dell'utente
+  void input_menu()
+  {
+
+    std::cout << "\nPremi 'h'=home, 's'=start callback 'e'=exit callback, '1'=next step, 'q'=quit: ";
+    char input;
+    std::cin >> input;
+    
+
+    switch (input) {
+      case 'h':
+        // Inizializza la posa del robot nella posizione Home
+        RCLCPP_INFO(this->get_logger(), "Moving to home position...");
+        initial_robot_pose();
+        break;
+      case 's':
+        // Abilita la callback per ricevere i keypoint
+        RCLCPP_INFO(this->get_logger(), "Start callback.");
+        enable_callback(true);
+        break;
+      case 'e':
+        // Disattiva la callback per non ricevere più keypoint
+        RCLCPP_INFO(this->get_logger(), "Exit callback.");
+        enable_callback(false);
+        keypoint_arrived = false; // Reset del flag per il keypoint
+        waiting_for_decision_ = false; // Reset del flag di attesa decisione
+        break;
+      case '1':
+        // Imposta il flag per avanzare alla prossima fase della routine
+        set_flag(1);
+        break;
+      case 'q':
+        // Chiudi il nodo e termina l'esecuzione
+        RCLCPP_INFO(this->get_logger(), "Quit command received. Shutting down.");
+        rclcpp::shutdown();
+        break;
+      case 'c':
+        // Setta la decisione per la callback - c = continua
+        setDecisionFlag('c');
+        break;
+      case 'r':
+        // Setta la decisione per la callback - r = rigenera
+        setDecisionFlag('r');
+        break;
+      default:
+        std::cout << "Input non riconosciuto, riprova." << std::endl;
+        break;
+  }
+}
+  
   // Funzione per attendere l'input dell'utente
   void wait_for_user(const std::string& step_name) {
     RCLCPP_INFO(this->get_logger(), "Attesa comando utente per lo step: %s", step_name.c_str());
@@ -127,7 +198,7 @@ private:
   // Questa funzione crea un marker di tipo SPHERE e lo pubblica sul topic /visualization_marker
   void publish_marker_at_keypoint(const geometry_msgs::msg::Point &point) {
     visualization_msgs::msg::Marker marker;
-    marker.header.frame_id = "base_link";  // Adatta al tuo sistema di riferimento
+    marker.header.frame_id = "base_link";
     marker.header.stamp = this->now();
     marker.ns = "keypoint_marker";
     marker.id = 0;
@@ -146,16 +217,83 @@ private:
     marker_pub_->publish(marker);
   }
 
-  // Funzione per chiedere all'utente se vuole continuare o rigenerare il keypoint
-  // Questa funzione stampa un messaggio e attende l'input dell'utente
-  // 'c' per continuare o 'r' per rigenerare il keypoint
-  char ask_user_to_continue() {
-    char response;
-    std::cout << "Punto di presa ricevuto. Vuoi continuare? (c = continua, r = rigenera): ";
-    std::cin >> response;
-    return response;
-  } 
+  void execute_grasp(){
+    wait_for_user("Prendi oggetto"); 
+    publish_grasp_command("grasp");
+    menu_->moveGripper(true);
+    rclcpp::sleep_for(std::chrono::milliseconds(500)); // Attendi chiusura gripper
+    menu_->move_along_z(0.2, true); // Alza l'oggetto di  20 cm
+  }
 
+  void execute_move(){
+    wait_for_user("Sposta oggetto");
+    menu_->oneJointMove(0, 90); // Ruota il braccio di 90 gradi
+  }
+
+  void execute_place(){
+    wait_for_user("Appoggia oggettto");
+    menu_->move_along_z(-0.2, true);  // Abbassa l'oggetto di 20 cm
+    rclcpp::sleep_for(std::chrono::milliseconds(4000));  // Attendi che l'oggetto venga posizionato
+    publish_grasp_command("release");
+    menu_->moveGripper(false);
+    rclcpp::sleep_for(std::chrono::milliseconds(500));  // Attendi apertura gripper
+    menu_->move_along_z(0.3, true);  // Alza il braccio di 30 cm dopo aver rilasciato l'oggetto
+  }
+
+  void execute_home(){
+    wait_for_user("Ritorno a Home");
+    menu_->publishJointGoal(menu_->getKnownPose("home_gripper_down"));
+  }
+
+  void depth_check(){
+    if (target_pose.position.z < 0.1 || target_pose.position.z > 2.0) {
+      RCLCPP_WARN(this->get_logger(), "Profondità anomala, punto scartato.");
+      RCLCPP_WARN(this->get_logger(), "Rigenerazione del keypoint...");
+      setDecisionFlag('r'); // Rigenera keypoint
+    }
+  }
+
+  void process_received_keypoint(const geometry_msgs::msg::Point& msg) {
+    //--------------------------------------------NOTA BENE-----------------------------------------------
+    // msg riceve x y z corretti per CoppeliaSim (prendendo il manipolatore disteso come riferimento, x punta verso destra, y punta in avanti, z punta verso l'alto)
+    // In Rviz però gli assi x e y non corrispondono a quelli di CoppeliaSim, ma avviene una rotazione di -90 gradi rispetto a z
+    // Perciò:
+    // x rviz = -y coppeliasim
+    // y rviz = x coppeliasim
+    //----------------------------------------------------------------------------------------------------
+    target_pose.position.x = -msg.y;
+    target_pose.position.y = msg.x;
+    target_pose.position.z = msg.z;
+    target_pose.orientation = menu_->quaternion_from_euler(180, 0.0, 0.0);
+    RCLCPP_INFO(this->get_logger(), "Keypoint ricevuto: x=%.3f y=%.3f z=%.3f", msg.x, msg.y, msg.z);
+    // Visualizza il marker in RViz
+    publish_marker_at_keypoint(target_pose.position);
+    keypoint_arrived = true;
+  }
+
+  bool wait_decision(){
+    if (getDecisionFlag() != 'c' && getDecisionFlag() != 'r') {
+      if (!waiting_for_decision_) {
+        RCLCPP_INFO(this->get_logger(), "In attesa di input utente ('c' per continuare, 'r' per rigenerare)...");
+         waiting_for_decision_ = true;
+      }
+      return true; // Indica che si sta aspettando una decisione
+    }
+    return false; // Indica che non si sta aspettando una decisione
+  }
+
+  bool keypoint_regeneration(){
+    if (getDecisionFlag() == 'r') {
+      RCLCPP_INFO(this->get_logger(), "Rigenerazione del keypoint...");
+      keypoint_arrived = false; // Reset per rigenerare il keypoint
+      setDecisionFlag(' '); // Reset della decisione
+      waiting_for_decision_ = false; // Reset flag di attesa decisione
+      return true; // Indica che il keypoint è stato rigenerato
+    }
+    return false; // Indica che non è stata richiesta la rigenerazione del keypoint
+  }
+  
+// ========================================================= KEYPOINT CALLBACK  =========================================================
   // Callback per gestire i keypoint ricevuti
   void keypoint_callback(const geometry_msgs::msg::Point & msg) {
     if (!callback_enabled_){ 
@@ -166,91 +304,58 @@ private:
       // Stato di approccio all'oggetto
       case GraspState::Approach:{
         if(!keypoint_arrived){
-          //--------------------------------------------NOTA BENE-----------------------------------------------
-        // msg riceve x y z corretti per CoppeliaSim (prendendo il manipolatore disteso come riferimento, x punta verso destra, y punta in avanti, z punta verso l'alto)
-        // In Rviz però gli assi x e y non corrispondono a quelli di CoppeliaSim, ma avviene una rotazione di -90 gradi rispetto a z
-        // Perciò:
-        // x rviz = -y coppeliasim
-        // y rviz = x coppeliasim
-        //----------------------------------------------------------------------------------------------------
-          initial_pose.position.x = -msg.y;
-          initial_pose.position.y = msg.x;
-          initial_pose.position.z = msg.z;
-          initial_pose.orientation = menu_->quaternion_from_euler(180, 0.0, 0.0);
-          RCLCPP_INFO(this->get_logger(), "Keypoint ricevuto: x=%.3f y=%.3f z=%.3f", msg.x, msg.y, msg.z);
-          // Visualizza il marker in RViz
-          publish_marker_at_keypoint(initial_pose.position);
-          keypoint_arrived = true;
+          process_received_keypoint(msg);
         }
 
         // Controllo profondità - se troppo vicino o troppo lontano, scarta il keypoint
-        if (initial_pose.position.z < 0.1 || initial_pose.position.z > 2.0) {
-          RCLCPP_WARN(this->get_logger(), "Profondità anomala, punto scartato.");
-          RCLCPP_WARN(this->get_logger(), "Rigenerazione del keypoint...");
-          decision_flag_ = 'r'; // Reset della decisione
-        }
+        depth_check();
 
         // Attendi conferma dell'utente
-        if (decision_flag_ != 'c' && decision_flag_ != 'r') {
-          RCLCPP_INFO(this->get_logger(), "In attesa di input utente ('c' per continuare, 'r' per rigenerare)...");
-          return; // Esce e rientrerà alla prossima callback
+        if (wait_decision()) {
+          return;
         }
 
         // Se l'utente decide di rigenerare il keypoint
-        if (decision_flag_ == 'r') {
-          RCLCPP_INFO(this->get_logger(), "Rigenerazione del keypoint...");
-          keypoint_arrived = false; // Reset per rigenerare il keypoint
-          decision_flag_ = ' '; // Reset della decisione
-          return; // Esce e rientrerà alla prossima callback
+        if (keypoint_regeneration()) {
+          return;
         }
         
-        decision_flag_ = ' ';  // Resetto la decisione per evitare conflitti successivi
-
-        RCLCPP_INFO(this->get_logger(), "Approccio all’oggetto...");
+        decision_flag_ = ' ';  // Reset decisione per evitare conflitti successivi
+        waiting_for_decision_ = false; // Reset flag di attesa decisione
 
         // Attendi l'input dell'utente per procedere con la pianificazione
         wait_for_user("Pianificazione e approccio all'oggetto");
-        menu_->cartesianPlanExecuteAndWait({initial_pose}, {}, "", 5);
+        menu_->cartesianPlanExecuteAndWait({target_pose}, {}, "", 5);
+    
         state = GraspState::Grasp;
+        
         break;
       }
 
       // Stato di presa dell'oggetto
       case GraspState::Grasp:{
-        wait_for_user("Prendi oggetto"); 
-        publish_grasp_command("grasp");
-        menu_->moveGripper(true);
-        rclcpp::sleep_for(std::chrono::milliseconds(500)); // Attendi chiusura gripper
-        menu_->move_along_z(0.2, true); // Alza l'oggetto di  20 cm
+        execute_grasp();
         state = GraspState::Move;
         break;
       }
 
       // Stato di spostamento dell'oggetto
       case GraspState::Move:{
-        wait_for_user("Sposta oggetto");
-        menu_->oneJointMove(0, 90); // Ruota il braccio di 90 gradi
+        execute_move();
         state = GraspState::Place;
         break;
       }
 
       // Stato di posizionamento dell'oggetto
       case GraspState::Place:{
-        wait_for_user("Appoggia oggettto");
-        menu_->move_along_z(-0.2, true);  // Abbassa l'oggetto di 20 cm
-        rclcpp::sleep_for(std::chrono::milliseconds(4000));  // Attendi che l'oggetto venga posizionato
-        publish_grasp_command("release");
-        menu_->moveGripper(false);
-        rclcpp::sleep_for(std::chrono::milliseconds(500));  // Attendi apertura gripper
-        menu_->move_along_z(0.3, true);  // Alza il braccio di 30 cm dopo aver rilasciato l'oggetto
+        execute_place();
         state = GraspState::Home;
         break;
       }
       
       // Stato di ritorno alla posizione Home
       case GraspState::Home:{
-        wait_for_user("Ritorno a Home");
-        menu_->publishJointGoal(menu_->getKnownPose("home_gripper_down"));
+        execute_home();
         state = GraspState::Idle;
         break;
       }
@@ -278,33 +383,7 @@ int main(int argc, char * argv[])
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(node);
 
-  // Avvia il menu del manipolatore in un thread separato
-  std::thread input_thread([&]() {
-    char input;
-    while (rclcpp::ok()) {
-      std::cout << "\nPremi 'h'=home, 's'=start callback, '1'=next step, 'q'=quit: ";
-      std::cin >> input;
-      if (input == 'h') {
-        node->initial_robot_pose(); // Inizializza la posa del robot nella posizione Home
-      } else if (input == 's') {
-        node->enable_callback(true);  // Abilita la callback per ricevere i keypoint
-      } else if (input == '1') {
-        node->set_flag(1);   // Imposta il flag per avanzare alla prossima fase della routine
-      } else if (input == 'q') {
-          rclcpp::shutdown(); // Chiudi il nodo e termina l'esecuzione
-          break;
-      } else if (input == 'c') {
-          node->setDecisionFlag('c');  // ✅ Setta la decisione per la callback
-      } else if (input == 'r') {
-          node->setDecisionFlag('r');  // ❌ Rifiuta la decisione per la callback
-      } else {
-          std::cout << "Input non riconosciuto, riprova." << std::endl;
-      }
-    }
-  });
-
   executor.spin();
-  input_thread.join();
 
   rclcpp::shutdown();
   return 0;
