@@ -4,7 +4,7 @@
 # But not these file
 !include/
 !include/grasping_node/
-!include/grasping_node/.keep
+!include/grasping_node/graspingUtils.h
 
 !config/
 !config/config.yaml
@@ -14,6 +14,9 @@
 
 !src/
 !src/grasp_bag.cpp
+!src/auto_grasp_bag.cpp
+!src/auto_moveGrasp_bag.cpp
+!src/grasping_utils.cpp
 
 !LICENSE
 !package.xml
