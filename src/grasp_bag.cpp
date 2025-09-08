@@ -325,7 +325,7 @@ private:
 
         // Attendi l'input dell'utente per procedere con la pianificazione
         wait_for_user("Pianificazione e approccio all'oggetto");
-        menu_->cartesianPlanExecuteAndWait({target_pose}, {}, "", 5);
+        menu_->cartesianPlanExecuteAndWait({target_pose}, {}, 5, 5);
     
         state = GraspState::Grasp;
         

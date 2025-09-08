@@ -156,7 +156,7 @@ public:
     auto joints = menu_->getKnownPose("home_gripper_down"); // joints è di tipo std::vector<double>
     if (joints.empty()) return;
     //menu_->publishJointGoal(joints);
-    menu_->cartesianPlanExecuteAndWait({menu_->pose_from_vector(joints)}, {}, "", 5);
+    menu_->cartesianPlanExecuteAndWait({menu_->pose_from_vector(joints)}, {}, 5, 5);
     rclcpp::sleep_for(std::chrono::milliseconds(5000));
 
   }
@@ -394,7 +394,10 @@ private:
 
   // Funzione per aggiornare il target in prossimità del sacco e pianificare/eseguire la posa dritta, inclinata di 45 gradi o dall'alto
   bool process_received_keypoint(const geometry_msgs::msg::Point& msg) {
-    
+
+    // Log info about received keypoint
+    RCLCPP_INFO(this->get_logger(), "Keypoint ricevuto: x=%.3f y=%.3f z=%.3f", msg.x, msg.y, msg.z);
+
     for(int i = 0; i < 3; i++) {
       target_pose.orientation = menu_->quaternion_from_euler(0 + 45 * i, 90, 180);
       manipulator_interfaces::msg::TrajectoryResult traj_result = menu_->planAndWait(target_pose);

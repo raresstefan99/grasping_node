@@ -308,7 +308,7 @@ private:
           depth_check();    
 
           // Procedi con la pianificazione
-          menu_->cartesianPlanExecuteAndWait({target_pose}, {}, "", 5);
+          menu_->cartesianPlanExecuteAndWait({target_pose}, {}, 5, 5);
     
           state = GraspState::Grasp;
         
