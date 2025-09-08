@@ -6,6 +6,12 @@
 !include/grasping_node/
 !include/grasping_node/.keep
 
+!config/
+!config/config.yaml
+
+!launch/
+!launch/auto_grasp_bag.launch.py
+
 !src/
 !src/grasp_bag.cpp
 

@@ -1,0 +1,7 @@
+grasp_node:
+  ros__parameters:
+    sim_mode: false
+    base_frame: "base_link"
+    camera_frame: "camera_link"
+    orientation_tolerance: 0.01
+
