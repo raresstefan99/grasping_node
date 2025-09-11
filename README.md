@@ -1,4 +1,4 @@
-# 🦾 Grasping Node (ROS 2)
+# Grasping Node (ROS 2)
 
 An automated robotic grasping routine implemented in C++ using ROS 2 and MoveIt. The node controls a UR manipulator (simulated in CoppeliaSim) to detect, approach, grasp, move, and place objects based on visual keypoint data. 
 It's also possible to control the process with a semi-automated control by the user.
@@ -16,7 +16,7 @@ The routine consists of:
 - return to the center of the room to resume scanning the bags
 
 
-## 📦 Package Overview
+## Package Overview
 
 This package:
 - Subscribes to keypoint detections (from a vision system, e.g., YOLO).
@@ -25,7 +25,7 @@ This package:
 - Visualizes the grasp target in RViz using markers.
 
 
-## 📋 Dependencies
+## Dependencies
 
 Make sure you have these ROS 2 packages installed:
 
@@ -52,7 +52,7 @@ The node publish the following topic:
 
 
 
-## 🚀 Usage
+## Usage
 
 ### 1. Clone the Package in your workspace
 
@@ -80,7 +80,7 @@ ros2 launch grasping_node auto_grasp_bag
 Or if you want to use a semi-automated process, use:
 
 ```bash
-ros2 run grasping_node grasp_bag
+ros2 run grasping_node menu_auto_grasp_bag
 ```
 
 The menu contains few commands:
@@ -91,14 +91,34 @@ The menu contains few commands:
 - Stop state machine
 - Advance one step
 
-## 🧠 State Machine
+Also, if you only want to test the grasping procedure, you can use the dedicated menu `grasp_bag`. 
+Note: the bag must be positioned near the robot, immediately in front of it. Only two useful preset poses are available for detection.
+
+```bash
+ros2 run grasping_node grasp_bag
+```
+
+The menu contains the following commands:
+
+- Go to Home position
+- Go to Scan position
+- Start keypoint callback
+- Stop keypoint callback
+- Process keypoint coordinates
+- Execute grasp
+- Execute place
+- Quit
+
+
+
+## State Machine
 
 First state machine: Idle → InitialPose → ScanEnvironment → ApproachTarget → End
 
 Second state machine: Approach → Grasp → Move → Place → Home → Idle
 
 
-## 🧪 Notes
+## Notes
 
     Designed primarily for CoppeliaSim simulation.
 
@@ -106,11 +126,11 @@ Second state machine: Approach → Grasp → Move → Place → Home → Idle
 
     Ensure the frame base_link matches the robot's base in RViz and simulation.
 
-## 📝 License
+## License
 
 This project is licensed under the Apache-2.0 License. See LICENSE for more details.
 
-## 👤 Author
+## Author
 
 Developed by [Rares Stefan], June 2025.
 

@@ -57,6 +57,19 @@ ament_target_dependencies(grasp_bag
 )
 target_link_libraries(grasp_bag grasping_utils)
 
+# menu_auto_grasp_bag
+add_executable(menu_auto_grasp_bag src/menu_auto_grasp_bag.cpp)
+target_compile_features(menu_auto_grasp_bag PUBLIC c_std_99 cxx_std_17)
+ament_target_dependencies(menu_auto_grasp_bag
+  rclcpp
+  std_msgs
+  geometry_msgs
+  manipulators
+  moveit_msgs
+  moveit_ros_planning_interface
+)
+target_link_libraries(menu_auto_grasp_bag grasping_utils)
+
 # auto_grasp_bag
 add_executable(auto_grasp_bag src/auto_grasp_bag.cpp)
 target_compile_features(auto_grasp_bag PUBLIC c_std_99 cxx_std_17) 
@@ -75,6 +88,7 @@ target_link_libraries(auto_grasp_bag grasping_utils)
 # Include directories (per tutti)
 # --------------------
 target_include_directories(grasp_bag PUBLIC include)
+target_include_directories(menu_auto_grasp_bag PUBLIC include)
 target_include_directories(auto_grasp_bag PUBLIC include)
 target_include_directories(grasping_utils PUBLIC include)
 
@@ -83,6 +97,7 @@ target_include_directories(grasping_utils PUBLIC include)
 # --------------------
 install(TARGETS
   grasp_bag
+  menu_auto_grasp_bag
   auto_grasp_bag
   grasping_utils
   DESTINATION lib/${PROJECT_NAME}

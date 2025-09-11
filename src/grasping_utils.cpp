@@ -80,8 +80,6 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
 }
 
 
-// ========================== IMPLEMENTAZIONE FUNZIONI PUBBLICHE ==========================
-
 // ========================== INIZIALIZZATORE ==========================
 void GraspNode::init() {
     ManipulatorMenuParams params;
@@ -186,7 +184,7 @@ void GraspNode::startRoutine() {
   }
 
 void GraspNode::stopRoutine() {
-  
+
     stop_search_timer();
     stop_grasp_timer();
     // stop twist
@@ -323,6 +321,11 @@ void GraspNode::keypoint_callback(const geometry_msgs::msg::Point & msg) {
     }
   }
 
+// Funzione per attivare la callback del keypoint
+void GraspNode::busy_keypoint_callback(bool enable){ 
+  busy = enable; 
+}
+
 void GraspNode::jointState_callback(const sensor_msgs::msg::JointState & msg) {
     // Aggiorna la posa corrente del manipolatore
     current_joint_pose_ = msg;
@@ -339,7 +342,6 @@ void GraspNode::basePoseCallback(const geometry_msgs::msg::Pose2D & msg)
 }
 
 
-// ========================== IMPLEMENTAZIONE FUNZIONI PRIVATE ==========================
 // ========================== CONTROLLO JOINTS ==========================
 bool GraspNode::moveJointsAndWait(const std::vector<double> &joint_target_deg, double tolerance_deg, double timeout_sec) 
 {
@@ -773,10 +775,10 @@ void GraspNode::publish_grasp_command(const std::string & command)
 // ========================== GESTIONE DATI ==========================
 
 // Funzione per aggiornare il target in prossimità del sacco e pianificare/eseguire la posa dritta, inclinata di 45 gradi o dall'alto
-bool GraspNode::process_received_keypoint(const geometry_msgs::msg::Point& msg) 
+bool GraspNode::process_received_keypoint() 
 {
     // Log info about received keypoint
-    RCLCPP_INFO(this->get_logger(), "Keypoint ricevuto: x=%.3f y=%.3f z=%.3f", msg.x, msg.y, msg.z);
+    RCLCPP_INFO(this->get_logger(), "Keypoint ricevuto: x=%.3f y=%.3f z=%.3f", target_pose.position.x, target_pose.position.y, target_pose.position.z);
 
     for(int i = 0; i < 3; i++) {
       target_pose.orientation = menu_->quaternion_from_euler(-90.0 - 45 * i, 0.0, -90.0);
@@ -1169,7 +1171,7 @@ void GraspNode::grasping() {
         
         busy_grasp = true;
        
-        if(!process_received_keypoint(target_pose.position)){
+        if(!process_received_keypoint()){
           rclcpp::sleep_for(std::chrono::milliseconds(3000));
           Gstate = GraspState::Approach;
           break;

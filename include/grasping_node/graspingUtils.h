@@ -70,6 +70,7 @@ public:
     void startRoutine();
     void stopRoutine();
     void setMenuMode(bool flag);
+    void busy_keypoint_callback(bool enable);
 
     // ========================== MACCHINE A STATI ==========================
     void searchAndApproch();
@@ -83,6 +84,25 @@ public:
     void initial_scan_pose();
     void execute_grasp();
 
+    // ========================== GESTIONE DATI ==========================
+    bool process_received_keypoint();
+    void fill_keypoint_buffer(const geometry_msgs::msg::Point &msg);
+    bool are_keypoints_similar();
+    bool filter_keypoint(const geometry_msgs::msg::Point &new_kp,
+                         std::vector<geometry_msgs::msg::Point> &buffer,
+                         double angle_threshold, double distance_threshold);
+    double normalizza_angolo (double a);
+    bool xy_is_similar(const geometry_msgs::msg::Point &p1, const geometry_msgs::msg::Point &p2, double tolerance = 0.5);
+    geometry_msgs::msg::Point nearest_keypoint();
+    bool cluster_keypoint(const geometry_msgs::msg::Point &new_kp,const double angle_threshold = 5, const double distance_threshold = 0.3, const double z_threshold = 0.15);
+    bool is_duplicate(const geometry_msgs::msg::Point &new_point, double tolerance = 0.3);
+
+
+     // ========================== MARKER / DEBUG ==========================
+    void publish_marker_at_keypoint(const geometry_msgs::msg::Point &point, std::string name, int index, bool add);
+    void delete_all_markers();
+
+
     // ========================== VARIABILI FLAG ==========================
     std::atomic<bool> keypoint_arrived{false};  // Flag per verificare se il keypoint è stato ricevuto
     std::atomic<bool> busy{false};  // Flag per indicare se il robot è occupato in una routine
@@ -91,6 +111,22 @@ public:
 
     SearchState Sstate = SearchState::Idle;  // Stato corrente della routine di ricerca
     GraspState Gstate = GraspState::Idle;  // Stato corrente della routine di presa
+
+    // ========================== VARIABILI PER LA GESTIONE KEYPOINT ==========================
+    geometry_msgs::msg::Pose target_pose;  // Posa iniziale del robot
+    std::deque<geometry_msgs::msg::Point> keypoint_buffer_;
+    const std::size_t required_similar_keypoints_ = 3; 
+    const double position_tolerance_ = 0.2; // 20 cm di tolleranza
+    geometry_msgs::msg::Point latest_keypoint_;
+    geometry_msgs::msg::Point latest_keypoint_world_;
+    geometry_msgs::msg::Point latest_keypoint_relative_;
+
+    // ========================== VARIABILI PER LA GESTIONE DEI SACCHI ==========================
+    std::vector<geometry_msgs::msg::Point> bag_buffer_; // Buffer per i sacchi già visti
+    std::vector<std::vector<geometry_msgs::msg::Point>> clusters_; // Cluster di sacchi
+    int nearest_index = -1;
+    double min_distance = 0.0;
+
 
     
 
@@ -118,22 +154,6 @@ private:
     // ========================== LOGICA DI CONTROLLO GRIPPER ==========================
     void publish_grasp_command(const std::string & command);
 
-    // ========================== GESTIONE DATI ==========================
-    bool process_received_keypoint(const geometry_msgs::msg::Point& msg);
-    void fill_keypoint_buffer(const geometry_msgs::msg::Point &msg);
-    bool are_keypoints_similar();
-    bool filter_keypoint(const geometry_msgs::msg::Point &new_kp,
-                         std::vector<geometry_msgs::msg::Point> &buffer,
-                         double angle_threshold, double distance_threshold);
-    double normalizza_angolo (double a);
-    bool xy_is_similar(const geometry_msgs::msg::Point &p1, const geometry_msgs::msg::Point &p2, double tolerance = 0.5);
-    geometry_msgs::msg::Point nearest_keypoint();
-    bool cluster_keypoint(const geometry_msgs::msg::Point &new_kp,const double angle_threshold = 5, const double distance_threshold = 0.3, const double z_threshold = 0.15);
-    bool is_duplicate(const geometry_msgs::msg::Point &new_point, double tolerance = 0.3);
-
-    // ========================== MARKER / DEBUG ==========================
-    void publish_marker_at_keypoint(const geometry_msgs::msg::Point &point, std::string name, int index, bool add);
-    void delete_all_markers();
     
     // =======================================================================
     // ========================== VARIABILI PRIVATE ==========================
@@ -172,14 +192,6 @@ private:
     // ========================== VARIABILI MACCHINA A STATI DI PRESA ==========================
     bool busy_grasp = false;
 
-    // ========================== VARIABILI PER LA GESTIONE KEYPOINT ==========================
-    geometry_msgs::msg::Pose target_pose;  // Posa iniziale del robot
-    std::deque<geometry_msgs::msg::Point> keypoint_buffer_;
-    const std::size_t required_similar_keypoints_ = 3; 
-    const double position_tolerance_ = 0.2; // 20 cm di tolleranza
-    geometry_msgs::msg::Point latest_keypoint_;
-    geometry_msgs::msg::Point latest_keypoint_world_;
-    geometry_msgs::msg::Point latest_keypoint_relative_;
     
     // ========================== PARAMETRI YAML ==========================
     bool menu_mode_;
@@ -189,11 +201,6 @@ private:
     std::vector<double> scan_pose_;
     std::vector<double> grasping_pose_; 
     
-    // ========================== VARIABILI PER LA GESTIONE DEI SACCHI ==========================
-    std::vector<geometry_msgs::msg::Point> bag_buffer_; // Buffer per i sacchi già visti
-    std::vector<std::vector<geometry_msgs::msg::Point>> clusters_; // Cluster di sacchi
-    int nearest_index = -1;
-    double min_distance = 0.0;
 
     // ========================== VARIABILI PER LA GESTIONE DEI JOINT ==========================
     sensor_msgs::msg::JointState current_joint_pose_; // Variabile per memorizzare la posa corrente del manipolatore
