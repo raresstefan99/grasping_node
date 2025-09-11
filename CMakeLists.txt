@@ -24,14 +24,30 @@ find_package(visualization_msgs REQUIRED)
 
 
 # --------------------
+# Libreria con GraspNode
+# --------------------
+add_library(grasping_utils
+  src/grasping_utils.cpp
+)
+target_include_directories(grasping_utils PUBLIC include)
+ament_target_dependencies(grasping_utils
+  rclcpp
+  ament_index_cpp
+  geometry_msgs
+  std_msgs
+  visualization_msgs
+  moveit_ros_planning_interface
+  manipulators
+)
+
+# --------------------
 # Executables
 # --------------------
 
 # grasp_bag
 add_executable(grasp_bag src/grasp_bag.cpp)
 target_compile_features(grasp_bag PUBLIC c_std_99 cxx_std_17)
-ament_target_dependencies(
-  grasp_bag
+ament_target_dependencies(grasp_bag
   rclcpp
   std_msgs
   geometry_msgs
@@ -39,12 +55,12 @@ ament_target_dependencies(
   moveit_msgs
   moveit_ros_planning_interface
 )
+target_link_libraries(grasp_bag grasping_utils)
 
 # auto_grasp_bag
 add_executable(auto_grasp_bag src/auto_grasp_bag.cpp)
 target_compile_features(auto_grasp_bag PUBLIC c_std_99 cxx_std_17) 
-ament_target_dependencies(
-  auto_grasp_bag
+ament_target_dependencies(auto_grasp_bag
   rclcpp
   std_msgs
   geometry_msgs
@@ -53,41 +69,14 @@ ament_target_dependencies(
   moveit_msgs
   moveit_ros_planning_interface
 )
-
-# auto_moveGrasp_bag
-add_executable(auto_moveGrasp_bag src/auto_moveGrasp_bag.cpp)
-target_compile_features(auto_moveGrasp_bag PUBLIC c_std_99 cxx_std_17) 
-ament_target_dependencies(
-  auto_moveGrasp_bag
-  rclcpp
-  std_msgs
-  geometry_msgs
-  manipulators
-  tf2_ros
-  moveit_msgs
-  moveit_ros_planning_interface
-)
-  
-# grasping_utils
-#add_executable(grasping_utils src/grasping_utils.cpp)
-#target_compile_features(auto_moveGrasp_bag PUBLIC c_std_99 cxx_std_17) 
-#ament_target_dependencies(grasping_utils
-#  rclcpp
-#  ament_index_cpp
-#  geometry_msgs
-#  std_msgs
-#  visualization_msgs
-#  moveit_ros_planning_interface
-#  manipulators
-#)
+target_link_libraries(auto_grasp_bag grasping_utils)
 
 # --------------------
 # Include directories (per tutti)
 # --------------------
 target_include_directories(grasp_bag PUBLIC include)
 target_include_directories(auto_grasp_bag PUBLIC include)
-target_include_directories(auto_moveGrasp_bag PUBLIC include)
-#target_include_directories(grasping_utils PUBLIC include)
+target_include_directories(grasping_utils PUBLIC include)
 
 # --------------------
 # Install targets
@@ -95,8 +84,7 @@ target_include_directories(auto_moveGrasp_bag PUBLIC include)
 install(TARGETS
   grasp_bag
   auto_grasp_bag
-  auto_moveGrasp_bag
-#  grasping_utils
+  grasping_utils
   DESTINATION lib/${PROJECT_NAME}
 )
   

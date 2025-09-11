@@ -1,7 +1,13 @@
 grasp_node:
   ros__parameters:
-    sim_mode: false
+    menu_mode: false # Left this to false, it will be set to true when the menu is activated (grasp_bag.cpp)
     base_frame: "base_link"
     camera_frame: "camera_link"
     orientation_tolerance: 0.01
+    home_pose: [0. , -90. , 90. , -90. , -90. , 180. ]
+    scan_pose: [0., -80., 160., -80., 90., 180.]
+    # -> morbida (0., -60., 120., -60., 90., 180.)
+    # -> media (0., -80., 140., -60., 90., 180.)
+    # -> spigolosa (0., -80., 160., -80., 90., 180.)
+    grasping_pose: [0., -60., 40., 90., 90., 180.] # Up position for bag grasping
 

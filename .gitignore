@@ -1,26 +1,3 @@
-# Ignore all
-*
+# Ignore 
 
-# But not these file
-!include/
-!include/grasping_node/
-!include/grasping_node/graspingUtils.h
-
-!config/
-!config/config.yaml
-
-!launch/
-!launch/auto_grasp_bag.launch.py
-
-!src/
-!src/grasp_bag.cpp
-!src/auto_grasp_bag.cpp
-!src/auto_moveGrasp_bag.cpp
-!src/grasping_utils.cpp
-
-!LICENSE
-!package.xml
-!README.md
-!CMakeLists.txt
-!.gitignore
-
+/.vscode
