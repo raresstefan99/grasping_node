@@ -1,6 +1,20 @@
 # 🦾 Grasping Node (ROS 2)
 
-A semi-automated robotic grasping routine implemented in C++ using ROS 2 and MoveIt. The node controls a UR manipulator (simulated in CoppeliaSim) to detect, approach, grasp, move, and place objects based on visual keypoint data. The process is controlled step-by-step via keyboard flags to give full control to the user.
+An automated robotic grasping routine implemented in C++ using ROS 2 and MoveIt. The node controls a UR manipulator (simulated in CoppeliaSim) to detect, approach, grasp, move, and place objects based on visual keypoint data. 
+It's also possible to control the process with a semi-automated control by the user.
+The manipulator is positioned on an omnidirectional mobile base (like the Neobotix MPO-500).
+
+The routine consists of:
+- manipulator in scanning position
+- 360-degree rotation of the mobile base
+- identification of the bags around it
+- calculation of the distance to the closest
+- I approach the bag in steps (to allow a visual check of the keypoint and avoid false positives) up to a certain desired distance
+- calculation and execution of the grasping trajectory if the presence of the bag is confirmed; otherwise, the search for the bags resumes
+- grasping the bag and moving it to a point B
+- I place the bag down and return to the scanning position
+- return to the center of the room to resume scanning the bags
+
 
 ## 📦 Package Overview
 
@@ -9,15 +23,7 @@ This package:
 - Plans and executes movements with MoveIt.
 - Publishes grasp/release commands to control a simulated gripper.
 - Visualizes the grasp target in RViz using markers.
-- Allows user control over every action via keyboard input.
 
-## 🛠️ Features
-
-- Cartesian and joint-space trajectory planning
-- Interactive state machine (`GraspState`)
-- Flag-based execution control (`'1'` to proceed, `'c'`/`'r'` to confirm or reject a keypoint)
-- Compatible with both simulation and real robots
-- Visual debugging in RViz (`visualization_msgs/Marker`)
 
 ## 📋 Dependencies
 
@@ -25,14 +31,26 @@ Make sure you have these ROS 2 packages installed:
 
 - `rclcpp`
 - `geometry_msgs`
+- `ament_index_cpp`
 - `std_msgs`
+- `sensor_msgs`
+- `geometry_msgs`
 - `visualization_msgs`
+- `moveit`
 - `manipulators` (custom library for motion planning)
 
 Also, this node assumes you are using:
-- A UR robot (e.g., UR10e) configured via MoveIt
+- A UR robot (e.g., UR5e) configured via MoveIt
 - A topic `/keypoint_data` publishing `geometry_msgs/Point` (you can use **detection_bag** in my repositories "https://github.com/raresstefan99/bag_detection")
-- A topic `/grasp_control` to trigger gripper actions in CoppeliaSim simulation
+- A topic `/base_pose2d` publishing `geometry_msgs::msg::Pose2D` by base odometry
+- A topic `/joint_states` to control if joints are reached
+
+The node publish the following topic: 
+- `grasp_control`  publish `std_msgs::msg::String` for Coppelia simulation
+- `keypoint_marker` publish `visualization_msgs::msg::Marker` for debug marker in Rviz
+- `cmd_vel` publish `geometry_msgs::msg::Twist` to control the mpo-500
+
+
 
 ## 🚀 Usage
 
@@ -46,7 +64,7 @@ git clone https://github.com/raresstefan99/grasping_node
 ### 2. Build the Package
 
 ```bash
-colcon build --packages-select grasping_node --symlink-install
+colcon build --symlink-install --packages-select grasping_node
 source install/setup.bash
 ```
 
@@ -54,39 +72,37 @@ source install/setup.bash
 
 Make sure your robot and MoveIt configuration are running. You can launch your environment (UR + MoveIt + RViz + CoppeliaSim) with your custom launch file.
 
-### 4. Run the Grasping Node
+### 4. Launch the Grasping Node
+
+```bash
+ros2 launch grasping_node auto_grasp_bag
+```
+Or if you want to use a semi-automated process, use:
 
 ```bash
 ros2 run grasping_node grasp_bag
 ```
 
-### 5. Keyboard Commands
+The menu contains few commands:
 
-After launching, use the terminal to control each step of the grasp:
-
-    h → move the robot to the home position
-
-    s → start accepting keypoints from /keypoint_data
-
-    c → confirm the keypoint and proceed with grasping
-
-    r → reject and wait for a new keypoint
-
-    1 → proceed to the next step in the grasping sequence
-
-    q → quit
+- Go to Home position
+- Go to Scan position
+- Start state machine
+- Stop state machine
+- Advance one step
 
 ## 🧠 State Machine
 
-Approach → Grasp → Move → Place → Home → Idle
+First state machine: Idle → InitialPose → ScanEnvironment → ApproachTarget → End
 
-Each state waits for the user to press '1' before continuing, allowing step-by-step control.
+Second state machine: Approach → Grasp → Move → Place → Home → Idle
+
 
 ## 🧪 Notes
 
     Designed primarily for CoppeliaSim simulation.
 
-    Adaptable to real robots by replacing the joint publishers and gripper control.
+    Adaptable to real robots.
 
     Ensure the frame base_link matches the robot's base in RViz and simulation.
 
