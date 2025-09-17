@@ -158,6 +158,8 @@ void GraspNode::init() {
       menu_->addObj("box_up", 1, box_up_size_, box_up_pose_, 0);
     }
 
+    client_ = this->create_client<RobotiQGripperControl>("/ur_rtde/robotiq_gripper/command");
+
     // ------------------------------------------------- TIMER START ROUTINE -------------------------------------------------
     
     if(!menu_mode_){
@@ -246,7 +248,8 @@ void GraspNode::execute_place(){
     menu_->move_along_z(-0.3, true);  // Abbassa l'oggetto di 20 cm
     rclcpp::sleep_for(std::chrono::milliseconds(5000));  // Attendi che l'oggetto venga posizionato
     publish_grasp_command("release");
-    menu_->moveGripper(false);
+    // menu_->moveGripper(false);
+    open();
     rclcpp::sleep_for(std::chrono::milliseconds(1000));  // Attendi apertura gripper
     //menu_->move_along_z(0.2, true);  // Alza il braccio di 30 cm dopo aver rilasciato l'oggetto
     moveJointsAndWait(grasping_pose_, 1.0, 15.0);
@@ -271,7 +274,8 @@ void GraspNode::execute_grasp()
     rclcpp::sleep_for(std::chrono::milliseconds(5000)); // Attendi che il robot sia pronto
     publish_grasp_command("grasp");
     rclcpp::sleep_for(std::chrono::milliseconds(500));
-    menu_->moveGripper(true);
+    // menu_->moveGripper(true);
+    close();
     rclcpp::sleep_for(std::chrono::milliseconds(1000)); // Attendi chiusura gripper
     //menu_->move_along_z(0.3, true); // Alza l'oggetto di  30 cm
     moveJointsAndWait(grasping_pose_, 1.0, 15.0);
@@ -1303,6 +1307,59 @@ void GraspNode::next_step_grasp() {
     grasping();
 }
 
+// Funzione per eseguire la presa
+bool GraspNode::waitForService(const std::chrono::milliseconds & timeout)
+    {
+        while (!client_->wait_for_service(timeout))
+        {
+            if (!rclcpp::ok())
+            {
+                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the service.");
+                return false;
+            }
+            RCLCPP_INFO(this->get_logger(), "Service not available, waiting...");
+        }
+        return true;
+    }
+
+bool GraspNode::command(int32_t position, int32_t speed, int32_t force)
+{
+    auto req = std::make_shared<RobotiQGripperControl::Request>();
+    req->position = position;  // 0=closed, 100=open
+    req->speed    = speed;     // 0..100
+    req->force    = force;     // 0..100
+
+    auto future = client_->async_send_request(req);
+
+    // Block until we have a response
+    if (rclcpp::spin_until_future_complete(shared_from_this(), future) !=
+        rclcpp::FutureReturnCode::SUCCESS)
+    {
+        RCLCPP_ERROR(this->get_logger(), "Service call failed.");
+        return false;
+    }
+
+    auto resp = future.get();
+    if (!resp)
+    {
+        RCLCPP_ERROR(this->get_logger(), "Empty response.");
+        return false;
+    }
+
+    RCLCPP_INFO(this->get_logger(), "success=%s, status=%d",
+                resp->success ? "true" : "false", resp->status);
+    return resp->success;
+}
+
+bool GraspNode::open(int32_t speed, int32_t force)
+{
+    return command(100, speed, force);
+}
+
+bool GraspNode::close(int32_t speed, int32_t force)
+  {
+      return command(0, speed, force);
+  }
 
 // ========================== COSTRUTTORE MENU E FUNZIONI MENU ==========================
 

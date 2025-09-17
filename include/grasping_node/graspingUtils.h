@@ -28,6 +28,7 @@
 
 #include "geometry_msgs/msg/pose2_d.hpp"
 
+using RobotiQGripperControl = manipulator_interfaces::srv::RobotiQGripperControl;
 
 enum class GraspState {
   Idle,
@@ -154,7 +155,11 @@ private:
     // ========================== LOGICA DI CONTROLLO GRIPPER ==========================
     void publish_grasp_command(const std::string & command);
 
-    
+    bool waitForService(const std::chrono::milliseconds & timeout = 1000ms);
+    bool command(int32_t position, int32_t speed, int32_t force);
+    bool open(int32_t speed = 100, int32_t force = 100);
+    bool close(int32_t speed = 100, int32_t force = 100);
+
     // =======================================================================
     // ========================== VARIABILI PRIVATE ==========================
     // =======================================================================
@@ -181,6 +186,9 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_grasp_control; // Publisher per i comandi di presa e rilascio
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_; // Publisher per i marker in RViz
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+
+    // Service client per il gripper Robotiq
+    rclcpp::Client<RobotiQGripperControl>::SharedPtr client_;
     
     // ========================== VARIABILI MACCHINA A STATI DI RICERCA ==========================
     int consecutive_mismatches_ = 0;
