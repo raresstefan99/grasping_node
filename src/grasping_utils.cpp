@@ -25,6 +25,58 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
     this->declare_parameter<std::vector<double>>("grasping_pose", {0., -60., 40., 90., 90., 180.});
     this->get_parameter("grasping_pose", grasping_pose_);
 
+    this->declare_parameter<bool>("neobotix_mpo_500", false);
+    this->get_parameter("neobotix_mpo_500", neobotix_mpo_500_);
+
+    this->declare_parameter<std::vector<double>>("box_down_pose", {-0.25, 0.0, -0.25, 0.0, 0.0, 0.0, 1.0});
+    this->get_parameter("box_down_pose", box_down_pose_vector_);
+    if (box_down_pose_vector_.size() == 7) {
+        box_down_pose_.position.x = box_down_pose_vector_[0];
+        box_down_pose_.position.y = box_down_pose_vector_[1];
+        box_down_pose_.position.z = box_down_pose_vector_[2];
+        box_down_pose_.orientation.x = box_down_pose_vector_[3];
+        box_down_pose_.orientation.y = box_down_pose_vector_[4];
+        box_down_pose_.orientation.z = box_down_pose_vector_[5];
+        box_down_pose_.orientation.w = box_down_pose_vector_[6];
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Parameter 'box_down' does not have 7 elements, using default values.");
+        box_down_pose_.position.x = -0.25;
+        box_down_pose_.position.y = 0.0;
+        box_down_pose_.position.z = -0.25;
+        box_down_pose_.orientation.x = 0.0;
+        box_down_pose_.orientation.y = 0.0;
+        box_down_pose_.orientation.z = 0.0;
+        box_down_pose_.orientation.w = 1.0;
+    }
+
+    this->declare_parameter<std::vector<double>>("box_down_size", {1.0, 0.7, 0.5});
+    this->get_parameter("box_down_size", box_down_size_);
+
+    this->declare_parameter<std::vector<double>>("box_up_pose", {-0.5, 0.0, 0.2, 0.0, 0.0, 0.0, 1.0});
+    this->get_parameter("box_up_pose", box_up_pose_vector_);
+    if (box_up_pose_vector_.size() == 7) {
+        box_up_pose_.position.x = box_up_pose_vector_[0];
+        box_up_pose_.position.y = box_up_pose_vector_[1];
+        box_up_pose_.position.z = box_up_pose_vector_[2];
+        box_up_pose_.orientation.x = box_up_pose_vector_[3];
+        box_up_pose_.orientation.y = box_up_pose_vector_[4];
+        box_up_pose_.orientation.z = box_up_pose_vector_[5];
+        box_up_pose_.orientation.w = box_up_pose_vector_[6];
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Parameter 'box_down' does not have 7 elements, using default values.");
+        box_up_pose_.position.x = -0.5;
+        box_up_pose_.position.y = 0.0;
+        box_up_pose_.position.z = 0.2;
+        box_up_pose_.orientation.x = 0.0;
+        box_up_pose_.orientation.y = 0.0;
+        box_up_pose_.orientation.z = 0.0;
+        box_up_pose_.orientation.w = 1.0;
+    }
+
+    this->declare_parameter<std::vector<double>>("box_up_size", {0.5, 0.7, 0.4});
+    this->get_parameter("box_ip_size", box_up_size_);
+
+
     // ------------------------------------------------- CALLBACK GROUPS -------------------------------------------------
 
     // Per evitare conflitti di accesso alle risorse condivise - Race Conditions
@@ -99,27 +151,12 @@ void GraspNode::init() {
     
     menu_ = std::make_shared<ManipulatorMenu>(params, shared_from_this(), false);
     
-    /*
-    geometry_msgs::msg::Pose pose1;
-    pose1.position.x = -0.25;
-    pose1.position.y = 0.0;
-    pose1.position.z = -0.25;
-    pose1.orientation.x = 0.0;
-    pose1.orientation.y = 0.0;
-    pose1.orientation.z = 0.0;
-    pose1.orientation.w = 1.0;
-    menu_->addObj("box1", 1, {1.0, 0.7, 0.5}, pose1, 0);
+    if(neobotix_mpo_500_){
+      
+      menu_->addObj("box_down", 1, box_down_size_, box_down_pose_, 0);
 
-    geometry_msgs::msg::Pose pose2;
-    pose2.position.x = -0.25;
-    pose2.position.y = 0.0;
-    pose2.position.z = -0.25;
-    pose2.orientation.x = 0.0;
-    pose2.orientation.y = 0.0;
-    pose2.orientation.z = 0.0;
-    pose2.orientation.w = 1.0;
-    menu_->addObj("box2", 1, {1.0, 0.7, 0.5}, pose2, 0);
-    */
+      menu_->addObj("box_up", 1, box_up_size_, box_up_pose_, 0);
+    }
 
     // ------------------------------------------------- TIMER START ROUTINE -------------------------------------------------
     

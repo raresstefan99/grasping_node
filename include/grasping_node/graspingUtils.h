@@ -200,6 +200,14 @@ private:
     std::vector<double> home_pose_;
     std::vector<double> scan_pose_;
     std::vector<double> grasping_pose_; 
+    bool neobotix_mpo_500_;
+    geometry_msgs::msg::Pose box_down_pose_;
+    std::vector<double> box_down_pose_vector_;
+    std::vector<double> box_down_size_;
+    geometry_msgs::msg::Pose box_up_pose_;
+    std::vector<double> box_up_pose_vector_;
+    std::vector<double> box_up_size_;
+
     
 
     // ========================== VARIABILI PER LA GESTIONE DEI JOINT ==========================
