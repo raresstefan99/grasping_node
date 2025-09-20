@@ -109,7 +109,20 @@ The menu contains the following commands:
 - Execute place
 - Quit
 
+```bash
+ros2 run grasping_node test_search_and_grasp
+```
 
+The menu contains the following commands:
+
+  - 'h'=home position, 'j'=scan position, 'k'=grasp position"
+  - 'o'=start grasp callback, 'p'=exit grasp callback"
+  - 'v'=rotate/search bag, 'b'=go towards bag, 'n'=go to xy, 'm'=initial pose"
+  - '0'=process keypoint, '1'=align with keypoint, '2'=go down, '3'=execute grasp, '4'=execute place"
+  - '5'=open gripper, '6'=close gripper"
+  - 'w'=step forward TCP, 's'=step back TCP, 'a'=step left TCP, 'd'=step right TCP, 'r'=step up TCP, 'f'=step down TCP"
+  - 'z'=EMERGENCY STOP for auto routine, 'x'=Start auto routine"
+  - 'q'=quit
 
 ## State Machine
 
