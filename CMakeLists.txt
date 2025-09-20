@@ -44,6 +44,19 @@ ament_target_dependencies(grasping_utils
 # Executables
 # --------------------
 
+# test_search_and_grasp.cpp
+add_executable(test_search_and_grasp src/test_search_and_grasp.cpp)
+target_compile_features(test_search_and_grasp PUBLIC c_std_99 cxx_std_17)
+ament_target_dependencies(test_search_and_grasp
+  rclcpp
+  std_msgs
+  geometry_msgs
+  manipulators
+  moveit_msgs
+  moveit_ros_planning_interface
+)
+target_link_libraries(test_search_and_grasp grasping_utils)
+
 # grasp_bag
 add_executable(grasp_bag src/grasp_bag.cpp)
 target_compile_features(grasp_bag PUBLIC c_std_99 cxx_std_17)
@@ -87,6 +100,7 @@ target_link_libraries(auto_grasp_bag grasping_utils)
 # --------------------
 # Include directories (per tutti)
 # --------------------
+target_include_directories(test_search_and_grasp PUBLIC include)
 target_include_directories(grasp_bag PUBLIC include)
 target_include_directories(menu_auto_grasp_bag PUBLIC include)
 target_include_directories(auto_grasp_bag PUBLIC include)
@@ -96,6 +110,7 @@ target_include_directories(grasping_utils PUBLIC include)
 # Install targets
 # --------------------
 install(TARGETS
+  test_search_and_grasp
   grasp_bag
   menu_auto_grasp_bag
   auto_grasp_bag

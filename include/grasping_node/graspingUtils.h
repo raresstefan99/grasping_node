@@ -20,6 +20,7 @@
 #include <geometry_msgs/msg/twist.hpp>
 
 #include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/float32.hpp"
 
 #include "visualization_msgs/msg/marker.hpp"
 
@@ -71,6 +72,7 @@ public:
     void startRoutine();
     void stopRoutine();
     void setMenuMode(bool flag);
+    void setSimMode(bool flag);
     void busy_keypoint_callback(bool enable);
 
     // ========================== MACCHINE A STATI ==========================
@@ -81,9 +83,12 @@ public:
 
     // ========================== LOGICA DI CONTROLLO MANIPOLATORE ==========================
     void execute_place();
+    void grasp_pose();
     void execute_home();
     void initial_scan_pose();
     void execute_grasp();
+    void goDownUntilForce(double target_force = 6.0, double delta_z = 0.005, bool linear = true);
+    void alignWithKeypoint(const geometry_msgs::msg::Pose& pose_keypoint, double tolerance = 0.01);
 
     // ========================== GESTIONE DATI ==========================
     bool process_received_keypoint();
@@ -99,9 +104,20 @@ public:
     bool is_duplicate(const geometry_msgs::msg::Point &new_point, double tolerance = 0.3);
 
 
-     // ========================== MARKER / DEBUG ==========================
+    // ========================== MARKER / DEBUG ==========================
     void publish_marker_at_keypoint(const geometry_msgs::msg::Point &point, std::string name, int index, bool add);
     void delete_all_markers();
+
+    // ========================== GRIPPER ==========================
+    bool open(int32_t speed = 100, int32_t force = 100);
+    bool close(int32_t speed = 100, int32_t force = 100);
+
+    // ========================== LOGICA DI CONTROLLO BASE MOBILE ==========================
+    void move_base_towards(const geometry_msgs::msg::Point &new_point, double step = 0.5, double min_distance = 1.0);
+    void rotate_and_scan(double target_yaw = 360);
+    bool rotate_until_target (double angle_rad, double angular_speed = 0.3);
+    bool rotate_base(double deg);
+    bool goToXY(double target_x, double target_y);
 
 
     // ========================== VARIABILI FLAG ==========================
@@ -128,7 +144,12 @@ public:
     int nearest_index = -1;
     double min_distance = 0.0;
 
+    // ========================== VARIABILI PER LA GESTIONE SENSORE DI FORZA ==========================
+    double force_z_;
+    double height;
 
+    // ========================== PUNTATORE AL MANIPOLATORE ==========================
+    std::shared_ptr<ManipulatorMenu> menu_; 
     
 
 private:
@@ -140,25 +161,19 @@ private:
     void keypoint_callback(const geometry_msgs::msg::Point & msg);
     void jointState_callback(const sensor_msgs::msg::JointState & msg);
     void basePoseCallback(const geometry_msgs::msg::Pose2D & msg);
+    void forceCallback(const std_msgs::msg::Float32 & msg);
 
     // ========================== CONTROLLO JOINTS ==========================
     bool moveJointsAndWait(const std::vector<double> &joint_target_deg, double tolerance_deg, double timeout_sec = 5.0);
     bool moveJointAndWait(int num, double joint_rot, double tolerance_deg, double timeout_sec = 5.0);
 
-    // ========================== LOGICA DI CONTROLLO BASE MOBILE ==========================
-    void move_base_towards(const geometry_msgs::msg::Point &new_point, double step = 0.5, double min_distance = 1.0);
-    void rotate_and_scan();
-    bool rotate_until_target (double angle_rad, double angular_speed = 0.3);
-    bool rotate_base(double deg);
-    bool goToXY(double target_x, double target_y);
 
     // ========================== LOGICA DI CONTROLLO GRIPPER ==========================
     void publish_grasp_command(const std::string & command);
 
     bool waitForService(const std::chrono::milliseconds & timeout = 1000ms);
     bool command(int32_t position, int32_t speed, int32_t force);
-    bool open(int32_t speed = 100, int32_t force = 100);
-    bool close(int32_t speed = 100, int32_t force = 100);
+
 
     // =======================================================================
     // ========================== VARIABILI PRIVATE ==========================
@@ -168,9 +183,7 @@ private:
     rclcpp::CallbackGroup::SharedPtr callback_group_keypoint_;
     rclcpp::CallbackGroup::SharedPtr callback_group_joint_;
     rclcpp::CallbackGroup::SharedPtr callback_group_base_;
-    
-    // ========================== PUNTATORE AL MANIPOLATORE ==========================
-    std::shared_ptr<ManipulatorMenu> menu_; 
+    rclcpp::CallbackGroup::SharedPtr callback_group_force_;
 
     // ========================== VARIABILI TIMER ==========================
     rclcpp::TimerBase::SharedPtr init_timer_;
@@ -181,11 +194,12 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr keypoint_sub_; // Iscrizione al topic dei keypoint
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Pose2D>::SharedPtr base_pose_sub_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr force_sub_;
     
     // ========================== PUBLISHERS ==========================
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_grasp_control; // Publisher per i comandi di presa e rilascio
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_; // Publisher per i marker in RViz
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+    public:rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
 
     // Service client per il gripper Robotiq
     rclcpp::Client<RobotiQGripperControl>::SharedPtr client_;
@@ -203,6 +217,7 @@ private:
     
     // ========================== PARAMETRI YAML ==========================
     bool menu_mode_;
+    bool sim_mode_;
     std::string base_frame_, camera_frame_;
     double orientation_tolerance_;
     std::vector<double> home_pose_;
@@ -220,7 +235,7 @@ private:
 
     // ========================== VARIABILI PER LA GESTIONE DEI JOINT ==========================
     sensor_msgs::msg::JointState current_joint_pose_; // Variabile per memorizzare la posa corrente del manipolatore
-
+    
 
     // ========================== VARIABILI ODOMETRIA ==========================
     double base_x_ = 0.0;

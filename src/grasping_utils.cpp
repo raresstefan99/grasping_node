@@ -7,6 +7,9 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
     this->declare_parameter<bool>("menu_mode", false); 
     this->get_parameter("menu_mode", menu_mode_);
 
+    this->declare_parameter<bool>("sim_mode", false); 
+    this->get_parameter("sim_mode", sim_mode_);
+
     this->declare_parameter<std::string>("base_frame", "base_link");
     this->get_parameter("base_frame", base_frame_);
 
@@ -16,13 +19,13 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
     this->declare_parameter<double>("orientation_tolerance", 0.01);
     this->get_parameter("orientation_tolerance", orientation_tolerance_);
 
-    this->declare_parameter<std::vector<double>>("home_pose", {0., -90., 90., -90., -90., 180.});
+    this->declare_parameter<std::vector<double>>("home_pose", {0., -90., 90., -90., -90., -90.});
     this->get_parameter("home_pose", home_pose_);
 
-    this->declare_parameter<std::vector<double>>("scan_pose", {0., -80., 160., -80., 90., 180.});
+    this->declare_parameter<std::vector<double>>("scan_pose", {0., -95., 140., -200., -90., -90.});
     this->get_parameter("scan_pose", scan_pose_);
 
-    this->declare_parameter<std::vector<double>>("grasping_pose", {0., -60., 40., 90., 90., 180.});
+    this->declare_parameter<std::vector<double>>("grasping_pose", {0. , -60. , 60. , -90. , -90. , -90.});
     this->get_parameter("grasping_pose", grasping_pose_);
 
     this->declare_parameter<bool>("neobotix_mpo_500", false);
@@ -115,6 +118,18 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
       "/joint_states", rclcpp::QoS(1),
       std::bind(&GraspNode::jointState_callback, this, _1),
       options_base);
+
+    // FORCE SENSOR
+    callback_group_force_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive); // MutuallyExclusive = una callback alla volta
+    
+    rclcpp::SubscriptionOptions options_force;
+    options_force.callback_group = callback_group_force_;
+
+    force_sub_ = this->create_subscription<std_msgs::msg::Float32>(
+      "/ft_sensor",
+      rclcpp::QoS(1),
+      std::bind(&GraspNode::forceCallback, this, _1),
+      options_force);
     
 
     // ------------------------------------------------- PUBLISHERS -------------------------------------------------
@@ -209,6 +224,10 @@ void GraspNode::setMenuMode(bool flag)
   menu_mode_ = flag; 
 }
 
+void GraspNode::setSimMode(bool flag) 
+{ 
+  sim_mode_ = flag; 
+}
 
 // ========================== ROUTINE ==========================
 void GraspNode::startRoutine() {
@@ -245,15 +264,19 @@ void GraspNode::stopRoutine() {
 // ========================== LOGICA DI CONTROLLO MANIPOLATORE ==========================
 void GraspNode::execute_place(){
     rclcpp::sleep_for(std::chrono::milliseconds(1000));
-    menu_->move_along_z(-0.3, true);  // Abbassa l'oggetto di 20 cm
+    menu_->move_along_z(-height, true);  // Abbassa l'oggetto
     rclcpp::sleep_for(std::chrono::milliseconds(5000));  // Attendi che l'oggetto venga posizionato
     publish_grasp_command("release");
-    // menu_->moveGripper(false);
-    open();
+    if (sim_mode_) menu_->moveGripper(false);
+    else open();
     rclcpp::sleep_for(std::chrono::milliseconds(1000));  // Attendi apertura gripper
     //menu_->move_along_z(0.2, true);  // Alza il braccio di 30 cm dopo aver rilasciato l'oggetto
     moveJointsAndWait(grasping_pose_, 1.0, 15.0);
     rclcpp::sleep_for(std::chrono::milliseconds(5000));
+}
+
+void GraspNode::grasp_pose(){
+    moveJointsAndWait(grasping_pose_, 1.0, 15.0);
 }
 
 void GraspNode::execute_home(){
@@ -274,14 +297,53 @@ void GraspNode::execute_grasp()
     rclcpp::sleep_for(std::chrono::milliseconds(5000)); // Attendi che il robot sia pronto
     publish_grasp_command("grasp");
     rclcpp::sleep_for(std::chrono::milliseconds(500));
-    // menu_->moveGripper(true);
-    close();
+    if (sim_mode_) menu_->moveGripper(true);
+    else close();
     rclcpp::sleep_for(std::chrono::milliseconds(1000)); // Attendi chiusura gripper
-    //menu_->move_along_z(0.3, true); // Alza l'oggetto di  30 cm
-    moveJointsAndWait(grasping_pose_, 1.0, 15.0);
+    menu_->move_along_z(height, true); // Alza l'oggetto di  30 cm
+    //moveJointsAndWait(grasping_pose_, 1.0, 15.0);
     rclcpp::sleep_for(std::chrono::milliseconds(5000));
 }
 
+// delta_z: passo in metri (positivo o negativo)
+// linear: true se vuoi movimento lineare
+void GraspNode::goDownUntilForce(double target_force, double delta_z, bool linear)
+{
+    rclcpp::Rate rate(5); 
+
+    while (rclcpp::ok() && force_z_ < target_force)
+    {
+        // scendi di un piccolo passo
+        menu_->move_along_z(-delta_z, linear);
+
+        rate.sleep();
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Forza target raggiunta: %.2f N", force_z_);
+}
+
+void GraspNode::alignWithKeypoint(const geometry_msgs::msg::Pose& pose_keypoint, double tolerance) 
+{
+    rclcpp::Rate rate(10); 
+  
+    auto pose_tcp = menu_->getEEpose();
+    double dx = pose_keypoint.position.x - pose_tcp.position.x;
+    double dy = pose_keypoint.position.y - pose_tcp.position.y;
+    double dz = pose_tcp.position.z - pose_keypoint.position.z;
+
+    RCLCPP_INFO(this->get_logger(), "Allineamento: dx=%.3f, dy=%.3f", dx, dy);
+
+    // Muovi lungo X se fuori tolleranza
+    if (std::fabs(dx) > tolerance) menu_->move_along_x(dx, true);
+
+    // Muovi lungo Y se fuori tolleranza
+    if (std::fabs(dy) > tolerance) menu_->move_along_y(dy, true);
+
+    height = dz;
+
+    rate.sleep();
+
+}
 
 // ========================== IMPLEMENTAZIONE CALLBACKS ==========================
 void GraspNode::keypoint_callback(const geometry_msgs::msg::Point & msg) {
@@ -381,6 +443,10 @@ void GraspNode::basePoseCallback(const geometry_msgs::msg::Pose2D & msg)
     base_y_ = msg.y;
     base_theta_ = normalizza_angolo(msg.theta);
 }
+
+void GraspNode::forceCallback(const std_msgs::msg::Float32 & msg) {
+        force_z_ = msg.data;
+    }
 
 
 // ========================== CONTROLLO JOINTS ==========================
@@ -603,7 +669,7 @@ void GraspNode::move_base_towards(const geometry_msgs::msg::Point &new_point, do
 }
 
 // Funzione per girare su se stesso e scanarizzare l'ambiente in cerca di oggetti
-void GraspNode::rotate_and_scan()
+void GraspNode::rotate_and_scan(double target_yaw)
 {
   RCLCPP_INFO(this->get_logger(), "Inizio scansione...");
 
@@ -636,8 +702,8 @@ void GraspNode::rotate_and_scan()
     start_theta = base_theta_;  // aggiorna riferimento
     //RCLCPP_INFO(this->get_logger(), "accumulated_rotation = %.1f°", accumulated_rotation * 180.0 / M_PI);
     // Se ho completato ~360° (2π)
-    if (accumulated_rotation >= 2 * M_PI) {
-      RCLCPP_INFO(this->get_logger(), "Rotazione completa di 360°.");
+    if (accumulated_rotation >= target_yaw*M_PI/180) {
+      RCLCPP_INFO(this->get_logger(), "Rotazione completa di %.2f.", target_yaw);
       break;
     }
     rate.sleep();
@@ -822,7 +888,7 @@ bool GraspNode::process_received_keypoint()
     RCLCPP_INFO(this->get_logger(), "Keypoint ricevuto: x=%.3f y=%.3f z=%.3f", target_pose.position.x, target_pose.position.y, target_pose.position.z);
 
     for(int i = 0; i < 3; i++) {
-      target_pose.orientation = menu_->quaternion_from_euler(-90.0 - 45 * i, 0.0, -90.0);
+      target_pose.orientation = menu_->quaternion_from_euler(-180, 0.0 - 45 * i, 0.0);
       auto traj_result = menu_->cartesianPlanAndWait({target_pose}, {}, "", 5);
         if(traj_result.success) {
             // Esegui solo se la pianificazione è reale

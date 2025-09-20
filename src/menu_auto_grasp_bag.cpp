@@ -5,6 +5,7 @@ int main(int argc, char* argv[]) {
 
     auto node = std::make_shared<GraspNode>();
     node->setMenuMode(true);  // Forza modalità menu
+    node->setSimMode(true);
     node->init();  // inizializza menu_ e subscription
 
     // Start executor in background
