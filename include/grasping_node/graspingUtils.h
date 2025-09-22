@@ -27,6 +27,8 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <sensor_msgs/msg/joint_state.hpp>
 
+#include <geometry_msgs/msg/wrench_stamped.hpp>
+
 #include "geometry_msgs/msg/pose2_d.hpp"
 
 using RobotiQGripperControl = manipulator_interfaces::srv::RobotiQGripperControl;
@@ -161,7 +163,7 @@ private:
     void keypoint_callback(const geometry_msgs::msg::Point & msg);
     void jointState_callback(const sensor_msgs::msg::JointState & msg);
     void basePoseCallback(const geometry_msgs::msg::Pose2D & msg);
-    void forceCallback(const std_msgs::msg::Float32 & msg);
+    void forceCallback(const geometry_msgs::msg::WrenchStamped & msg);
 
     // ========================== CONTROLLO JOINTS ==========================
     bool moveJointsAndWait(const std::vector<double> &joint_target_deg, double tolerance_deg, double timeout_sec = 5.0);
@@ -194,7 +196,7 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr keypoint_sub_; // Iscrizione al topic dei keypoint
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Pose2D>::SharedPtr base_pose_sub_;
-    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr force_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr force_sub_;
     
     // ========================== PUBLISHERS ==========================
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_grasp_control; // Publisher per i comandi di presa e rilascio

@@ -125,8 +125,8 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
     rclcpp::SubscriptionOptions options_force;
     options_force.callback_group = callback_group_force_;
 
-    force_sub_ = this->create_subscription<std_msgs::msg::Float32>(
-      "/ft_sensor",
+    force_sub_ = this->create_subscription<geometry_msgs::msg::WrenchStamped>( // std_msgs::msg::Float32 coppelia
+      "/ur_rtde/ft_sensor", // /ft_sensor coppelia 
       rclcpp::QoS(1),
       std::bind(&GraspNode::forceCallback, this, _1),
       options_force);
@@ -444,8 +444,8 @@ void GraspNode::basePoseCallback(const geometry_msgs::msg::Pose2D & msg)
     base_theta_ = normalizza_angolo(msg.theta);
 }
 
-void GraspNode::forceCallback(const std_msgs::msg::Float32 & msg) {
-        force_z_ = msg.data;
+void GraspNode::forceCallback(const geometry_msgs::msg::WrenchStamped & msg) {
+        force_z_ = msg.wrench.force.z;
     }
 
 
