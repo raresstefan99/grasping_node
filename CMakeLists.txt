@@ -12,6 +12,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(manipulators REQUIRED)
+find_package(manipulator_interfaces REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -38,6 +39,7 @@ ament_target_dependencies(grasping_utils
   visualization_msgs
   moveit_ros_planning_interface
   manipulators
+  manipulator_interfaces
 )
 
 # --------------------

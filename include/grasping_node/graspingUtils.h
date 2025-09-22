@@ -27,7 +27,7 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <sensor_msgs/msg/joint_state.hpp>
 
-#include <geometry_msgs/msg/wrench_stamped.hpp>
+#include <geometry_msgs/msg/wrench.hpp>
 
 #include "geometry_msgs/msg/pose2_d.hpp"
 
@@ -163,12 +163,12 @@ private:
     void keypoint_callback(const geometry_msgs::msg::Point & msg);
     void jointState_callback(const sensor_msgs::msg::JointState & msg);
     void basePoseCallback(const geometry_msgs::msg::Pose2D & msg);
-    void forceCallback(const geometry_msgs::msg::WrenchStamped & msg);
+    void forceCallback(const geometry_msgs::msg::Wrench & msg);
 
     // ========================== CONTROLLO JOINTS ==========================
     bool moveJointsAndWait(const std::vector<double> &joint_target_deg, double tolerance_deg, double timeout_sec = 5.0);
     bool moveJointAndWait(int num, double joint_rot, double tolerance_deg, double timeout_sec = 5.0);
-
+    void pubTwist(double delta_z);
 
     // ========================== LOGICA DI CONTROLLO GRIPPER ==========================
     void publish_grasp_command(const std::string & command);
@@ -196,12 +196,13 @@ private:
     rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr keypoint_sub_; // Iscrizione al topic dei keypoint
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Pose2D>::SharedPtr base_pose_sub_;
-    rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr force_sub_;
+    rclcpp::Subscription<geometry_msgs::msg::Wrench>::SharedPtr force_sub_;
     
     // ========================== PUBLISHERS ==========================
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_grasp_control; // Publisher per i comandi di presa e rilascio
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_; // Publisher per i marker in RViz
     public:rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr arm_vel_pub_;
 
     // Service client per il gripper Robotiq
     rclcpp::Client<RobotiQGripperControl>::SharedPtr client_;

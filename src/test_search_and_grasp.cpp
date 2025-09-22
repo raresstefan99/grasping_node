@@ -141,7 +141,7 @@ void run_auto_routine(std::shared_ptr<GraspNode> node)
 
     RCLCPP_INFO(node->get_logger(), "Step 7: Going down until contact...");
     rclcpp::sleep_for(std::chrono::milliseconds(1000));
-    node->goDownUntilForce(0.0001, 0.1, true);
+    node->goDownUntilForce(3.0, 0.05, true);
     if (!auto_running_) break;
 
     RCLCPP_INFO(node->get_logger(), "Step 8: Execute grasp...");
@@ -269,8 +269,8 @@ void input_menu(std::shared_ptr<GraspNode> node, std::atomic<bool>& running)
       }
       break;
     case '0': node->process_received_keypoint(); break;
-    case '1': node->alignWithKeypoint(node->target_pose, 0.05); break;
-    case '2': node->goDownUntilForce(0.0001, 0.1, true); break;
+    case '1': node->alignWithKeypoint(node->target_pose, 0.01); break;
+    case '2': node->goDownUntilForce(3.0, 0.05, true); break;
     case '3': node->execute_grasp(); break;
     case '4': node->execute_place(); break;
     case '5': node->open(); break;

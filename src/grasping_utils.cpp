@@ -19,13 +19,13 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
     this->declare_parameter<double>("orientation_tolerance", 0.01);
     this->get_parameter("orientation_tolerance", orientation_tolerance_);
 
-    this->declare_parameter<std::vector<double>>("home_pose", {0., -90., 90., -90., -90., -90.});
+    this->declare_parameter<std::vector<double>>("home_pose", {0., -90., -90., -90., 90., -90.});
     this->get_parameter("home_pose", home_pose_);
 
-    this->declare_parameter<std::vector<double>>("scan_pose", {0., -95., 140., -200., -90., -90.});
+    this->declare_parameter<std::vector<double>>("scan_pose", {0., -85., -140., -10., 90., -90.});
     this->get_parameter("scan_pose", scan_pose_);
 
-    this->declare_parameter<std::vector<double>>("grasping_pose", {0. , -60. , 60. , -90. , -90. , -90.});
+    this->declare_parameter<std::vector<double>>("grasping_pose", {0. , -120. , -60. , -90. , 90. , -90.});
     this->get_parameter("grasping_pose", grasping_pose_);
 
     this->declare_parameter<bool>("neobotix_mpo_500", false);
@@ -125,7 +125,7 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
     rclcpp::SubscriptionOptions options_force;
     options_force.callback_group = callback_group_force_;
 
-    force_sub_ = this->create_subscription<geometry_msgs::msg::WrenchStamped>( // std_msgs::msg::Float32 coppelia
+    force_sub_ = this->create_subscription<geometry_msgs::msg::Wrench>( // std_msgs::msg::Float32 coppelia
       "/ur_rtde/ft_sensor", // /ft_sensor coppelia 
       rclcpp::QoS(1),
       std::bind(&GraspNode::forceCallback, this, _1),
@@ -143,7 +143,8 @@ GraspNode::GraspNode() : Node("grasp_bag_node") {
     // Publisher per i comandi di movimento della base mobile
     cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 1);
 
-
+    // Publisher per i comandi di movimento del braccio
+    arm_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/manipulator/cmd_vel", 1);
 }
 
 
@@ -173,7 +174,7 @@ void GraspNode::init() {
       menu_->addObj("box_up", 1, box_up_size_, box_up_pose_, 0);
     }
 
-    client_ = this->create_client<RobotiQGripperControl>("/ur_rtde/robotiq_gripper/command");
+    client_ = this->create_client<manipulator_interfaces::srv::RobotiQGripperControl>("/ur_rtde/robotiq_gripper/command");
 
     // ------------------------------------------------- TIMER START ROUTINE -------------------------------------------------
     
@@ -266,9 +267,10 @@ void GraspNode::execute_place(){
     rclcpp::sleep_for(std::chrono::milliseconds(1000));
     menu_->move_along_z(-height, true);  // Abbassa l'oggetto
     rclcpp::sleep_for(std::chrono::milliseconds(5000));  // Attendi che l'oggetto venga posizionato
-    publish_grasp_command("release");
-    if (sim_mode_) menu_->moveGripper(false);
-    else open();
+    // publish_grasp_command("release");
+    // if (sim_mode_) menu_->moveGripper(false);
+    // else open();
+    open();
     rclcpp::sleep_for(std::chrono::milliseconds(1000));  // Attendi apertura gripper
     //menu_->move_along_z(0.2, true);  // Alza il braccio di 30 cm dopo aver rilasciato l'oggetto
     moveJointsAndWait(grasping_pose_, 1.0, 15.0);
@@ -294,30 +296,46 @@ void GraspNode::initial_scan_pose(){
 
 void GraspNode::execute_grasp()
 {
-    rclcpp::sleep_for(std::chrono::milliseconds(5000)); // Attendi che il robot sia pronto
-    publish_grasp_command("grasp");
-    rclcpp::sleep_for(std::chrono::milliseconds(500));
-    if (sim_mode_) menu_->moveGripper(true);
-    else close();
+    // rclcpp::sleep_for(std::chrono::milliseconds(5000)); // Attendi che il robot sia pronto
+    // publish_grasp_command("grasp");
+    // rclcpp::sleep_for(std::chrono::milliseconds(500));
+    // if (sim_mode_) menu_->moveGripper(true);
+    // else close();
+    close();
     rclcpp::sleep_for(std::chrono::milliseconds(1000)); // Attendi chiusura gripper
     menu_->move_along_z(height, true); // Alza l'oggetto di  30 cm
     //moveJointsAndWait(grasping_pose_, 1.0, 15.0);
     rclcpp::sleep_for(std::chrono::milliseconds(5000));
 }
 
+void GraspNode::pubTwist(double delta_z)
+{
+    geometry_msgs::msg::Twist twist;
+    twist.linear.x = 0.0;
+    twist.linear.y = 0.0;
+    twist.linear.z = delta_z;
+    twist.angular.x = 0.0;
+    twist.angular.y = 0.0;
+    twist.angular.z = 0.0;
+    arm_vel_pub_->publish(twist);
+}
+
 // delta_z: passo in metri (positivo o negativo)
 // linear: true se vuoi movimento lineare
 void GraspNode::goDownUntilForce(double target_force, double delta_z, bool linear)
 {
-    rclcpp::Rate rate(5); 
+    rclcpp::Rate rate(50); 
+    menu_->setJacobianSpeedControl(true);
 
     while (rclcpp::ok() && force_z_ < target_force)
     {
         // scendi di un piccolo passo
-        menu_->move_along_z(-delta_z, linear);
-
+        // menu_->move_along_z(-delta_z, linear);
+        pubTwist(-delta_z);      
         rate.sleep();
     }
+    pubTwist(0.0); // stop
+    menu_->setJacobianSpeedControl(false);
 
     RCLCPP_INFO(this->get_logger(), "Forza target raggiunta: %.2f N", force_z_);
 }
@@ -444,8 +462,8 @@ void GraspNode::basePoseCallback(const geometry_msgs::msg::Pose2D & msg)
     base_theta_ = normalizza_angolo(msg.theta);
 }
 
-void GraspNode::forceCallback(const geometry_msgs::msg::WrenchStamped & msg) {
-        force_z_ = msg.wrench.force.z;
+void GraspNode::forceCallback(const geometry_msgs::msg::Wrench & msg) {
+        force_z_ = msg.force.z;
     }
 
 
@@ -1375,46 +1393,51 @@ void GraspNode::next_step_grasp() {
 
 // Funzione per eseguire la presa
 bool GraspNode::waitForService(const std::chrono::milliseconds & timeout)
+{
+    while (!client_->wait_for_service(timeout))
     {
-        while (!client_->wait_for_service(timeout))
+        if (!rclcpp::ok())
         {
-            if (!rclcpp::ok())
-            {
-                RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the service.");
-                return false;
-            }
-            RCLCPP_INFO(this->get_logger(), "Service not available, waiting...");
+            RCLCPP_ERROR(this->get_logger(), "Interrupted while waiting for the service.");
+            return false;
         }
-        return true;
+        RCLCPP_INFO(this->get_logger(), "Service not available, waiting...");
     }
+    return true;
+}
 
 bool GraspNode::command(int32_t position, int32_t speed, int32_t force)
 {
-    auto req = std::make_shared<RobotiQGripperControl::Request>();
-    req->position = position;  // 0=closed, 100=open
-    req->speed    = speed;     // 0..100
-    req->force    = force;     // 0..100
+    auto request = std::make_shared<manipulator_interfaces::srv::RobotiQGripperControl::Request>();
+    request->position = position;  // 0=closed, 100=open
+    request->speed    = speed;     // 0..100
+    request->force    = force;     // 0..100
 
-    auto future = client_->async_send_request(req);
-
-    // Block until we have a response
-    if (rclcpp::spin_until_future_complete(shared_from_this(), future) !=
-        rclcpp::FutureReturnCode::SUCCESS)
-    {
-        RCLCPP_ERROR(this->get_logger(), "Service call failed.");
-        return false;
+    // Check if service is available (short timeout so we don't block long)
+    if (!client_->wait_for_service(std::chrono::milliseconds(1000))) {
+        RCLCPP_INFO(this->get_logger(), "RobotiQ gripper service not available");
+        return false; // Request not sent
     }
 
-    auto resp = future.get();
-    if (!resp)
-    {
-        RCLCPP_ERROR(this->get_logger(), "Empty response.");
-        return false;
-    }
+    auto cb = [this](rclcpp::Client<manipulator_interfaces::srv::RobotiQGripperControl>::SharedFuture future) {
+        auto resp = future.get();
+        if (!resp) {
+            RCLCPP_ERROR(this->get_logger(), "Gripper: empty response.");
+            return;
+        }
 
-    RCLCPP_INFO(this->get_logger(), "success=%s, status=%d",
-                resp->success ? "true" : "false", resp->status);
-    return resp->success;
+        if (resp->success) {
+            RCLCPP_INFO(this->get_logger(), "Gripper command succeeded, status=%d", resp->status);
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Gripper command failed, status=%d", resp->status);
+        }
+    };
+
+    // Send the request asynchronously (no spin here)
+    client_->async_send_request(request, cb);
+
+    // We only report whether the request was dispatched, not the service result.
+    return true;
 }
 
 bool GraspNode::open(int32_t speed, int32_t force)
