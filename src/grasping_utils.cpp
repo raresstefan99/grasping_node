@@ -322,7 +322,7 @@ void GraspNode::pubTwist(double delta_z)
 
 // delta_z: passo in metri (positivo o negativo)
 // linear: true se vuoi movimento lineare
-void GraspNode::goDownUntilForce(double target_force, double delta_z, bool linear)
+void GraspNode::goDownUntilForce(double target_force, double delta_z, [[maybe_unused]] bool linear)
 {
     rclcpp::Rate rate(50); 
     menu_->setJacobianSpeedControl(true);

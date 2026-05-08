@@ -31,6 +31,8 @@
 
 #include "geometry_msgs/msg/pose2_d.hpp"
 
+#include "manipulator_interfaces/srv/roboti_q_gripper_control.hpp"
+
 using RobotiQGripperControl = manipulator_interfaces::srv::RobotiQGripperControl;
 
 enum class GraspState {
@@ -89,7 +91,7 @@ public:
     void execute_home();
     void initial_scan_pose();
     void execute_grasp();
-    void goDownUntilForce(double target_force = 6.0, double delta_z = 0.005, bool linear = true);
+    void goDownUntilForce(double target_force = 6.0, double delta_z = 0.005, [[maybe_unused]] bool linear = true);
     void alignWithKeypoint(const geometry_msgs::msg::Pose& pose_keypoint, double tolerance = 0.01);
 
     // ========================== GESTIONE DATI ==========================
